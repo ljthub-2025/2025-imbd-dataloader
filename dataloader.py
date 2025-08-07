@@ -79,6 +79,14 @@ def get_data(folder, k=None, num_k=None, train_val_ratio=0.8, train_files=TRAIN_
     random.seed(random_seed)
     random.shuffle(all_files)
     
+    # 1. 先固定分割測試集（不論哪個模式都使用相同方式）
+    test_count = int(len(all_files) * TEST_RATIO)
+    test_list = all_files[:test_count]
+    remaining_files = all_files[test_count:]
+    
+    print(f"測試集檔案數: {len(test_list)}")
+    print(f"剩餘檔案數: {len(remaining_files)}")
+    
     # 檢查是否使用交叉驗證模式
     if k is not None and num_k is not None:
         # 完整交叉驗證模式
@@ -91,25 +99,17 @@ def get_data(folder, k=None, num_k=None, train_val_ratio=0.8, train_files=TRAIN_
         print(f"使用完整交叉驗證模式：{k} 折交叉驗證，測試集比例 {TEST_RATIO:.1%}")
         print(f"訓練集在訓練驗證集中的比例：{train_val_ratio:.1%}")
         
-        # 1. 先分割測試集（使用全域參數）
-        test_count = int(len(all_files) * TEST_RATIO)
-        test_list = all_files[:test_count]
-        train_val_list = all_files[test_count:]
-        
-        print(f"測試集檔案數: {len(test_list)}")
-        print(f"訓練驗證集檔案數: {len(train_val_list)}")
-        
-        # 2. 對訓練驗證集進行K-Fold分割
-        files_per_fold = len(train_val_list) // k
-        remainder = len(train_val_list) % k
+        # 2. 對剩餘檔案進行K-Fold分割
+        files_per_fold = len(remaining_files) // k
+        remainder = len(remaining_files) % k
         
         # 計算當前折的起始和結束索引
         start_idx = (num_k - 1) * files_per_fold + min(num_k - 1, remainder)
         end_idx = start_idx + files_per_fold + (1 if num_k <= remainder else 0)
         
         # 分割檔案
-        val_list = train_val_list[start_idx:end_idx]
-        train_list = train_val_list[:start_idx] + train_val_list[end_idx:]
+        val_list = remaining_files[start_idx:end_idx]
+        train_list = remaining_files[:start_idx] + remaining_files[end_idx:]
         
         # 3. 根據train_val_ratio調整訓練集和驗證集的比例
         total_train_val_files = len(train_list) + len(val_list)
@@ -134,13 +134,17 @@ def get_data(folder, k=None, num_k=None, train_val_ratio=0.8, train_files=TRAIN_
     else:
         # 傳統分割模式
         print("使用傳統分割模式")
-        train_list = all_files[:train_files]
-        val_list = all_files[train_files:train_files+val_files]
-        test_list = all_files[train_files+val_files:]
+        
+        # 從剩餘檔案中按傳統比例分割訓練集和驗證集
+        total_remaining = len(remaining_files)
+        train_count = int(total_remaining * (train_files / (train_files + val_files)))
+        val_count = total_remaining - train_count
+        
+        train_list = remaining_files[:train_count]
+        val_list = remaining_files[train_count:]
         
         print(f"訓練集檔案數: {len(train_list)}")
         print(f"驗證集檔案數: {len(val_list)}")
-        print(f"測試集檔案數: {len(test_list)}")
 
     # 載入資料
     train_dfs = []
